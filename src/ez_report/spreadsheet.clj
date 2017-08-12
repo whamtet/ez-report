@@ -18,13 +18,21 @@
           :when (not-empty x)]
       x)))
 
+(defn interpose-str [i s]
+  (apply str (interpose i s)))
+
 (defn parse-workbook [f]
   (let [
          book (lazy-workbook (workbook-hssf f))
          first-sheet-name (first (sort (keys book)))
          first-sheet (book first-sheet-name)
+         first-sheet-str (interpose-str "\n" (map #(interpose-str "\t" %) first-sheet))
          sections (take-nth 2 (partition-by #(= "***" (first %)) first-sheet))
          ]
-    (for [[[title] & comments] sections]
-      {:title title
-       :comments (transpose comments)})))
+    {
+      "template"
+      (for [[[title] & comments] sections]
+        {:title title
+         :comments (transpose comments)})
+      "template-str" first-sheet-str}))
+

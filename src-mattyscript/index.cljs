@@ -3,12 +3,102 @@
   "import preact from \"preact\";
   const {h} = preact;")
 
-(import "./util" [inc assoc assoc-in dissoc-in modal mapcat get-in mean concat merge update-in])
+(import "./util" [inc dec assoc assoc-in dissoc-in modal mapcat get-in mean concat merge update-in
+                  str-contains last butlast select-keys del-i])
 (import "./state" [Atom SessionAtom UnmountingComponent])
 
 (def state (Atom. []))
+(set! window.state state)
 (def scale (SessionAtom. "scale" {:start "A"}))
-(set! window.scale scale)
+(def new-students (Atom. "Matthew whamtet@gmail.com\nFreddy Frog freddy@frog.com"))
+(def current-student (Atom. 0))
+;(def student-modal-tab (Atom. :schema))
+;(def schema-text (SessionAtom. "schema-text" window.template-str true))
+
+(defn add-students []
+  (let [
+         student-text new-students.state
+         student-data (for [line (.split (.trim student-text) "\n")]
+                        (let [
+                               words (.split (line.trim) #"\s+")
+                               [name email]
+                               (if (str-contains (last words) "@")
+                                 [(.join (butlast words) " ") (last words)]
+                                 [(words.join " ") ""])
+                               ]
+                          {:name name :email email}))
+         ]
+    (.modal ($ "#student-modal") "hide")
+    (new-students.reset "")
+    (state.swap concat student-data)))
+
+(defcomponent add-student-tab []
+  [:div {}
+   (.map
+     @state
+     (fn [{:keys [name email]} i]
+       [:div {}
+        [:input {:type "text"
+                 :value name
+                 :placeholder "Name"
+                 :onchange #(state.swap assoc-in [i "name"] (-> % .-target .-value))}]
+        " "
+        [:input {:type "email"
+                 :value email
+                 :placeholder "Email"
+                 :onchange #(state.swap assoc-in [i "name"] (-> % .-target .-value))}]
+        " "
+        [:button {:class "btn btn-default"
+                  :onclick #(when (confirm (+ "Delete " name "?"))
+                              (state.swap del-i i))} "Delete"]
+        ]))
+   [:h4 {} "New Students"]
+   [:textarea {:style "width: 100%"
+               :value @new-students
+               :onchange
+               (fn [e]
+                 (set! new-students.state e.target.value))
+               :rows 4}]
+   [:button {:class "btn btn-default"
+             :onclick add-students}
+    "Add Students"]])
+
+;(defn set-schema [])
+
+#_(defcomponent schema-tab []
+    (console.log "ss" @schema-text)
+    [:div {}
+     [:h4 {} "Marking Scheme"]
+     [:textarea {:style "width: 100%"
+                 :value @schema-text
+                 :onchange
+                 (fn [e]
+                   (set! schema-text.state e.target.value))
+                 :rows 4}]
+     [:button {:class "btn btn-default"
+               :onclick set-schema}
+      "Set Schema"]])
+
+(defcomponent student-modal []
+  (let [
+         ;student-modal-tab-val @student-modal-tab
+         ]
+    (modal "student-modal" "Students" ;(if (= :student student-modal-tab-val) "Students" "Schema")
+           [:div {}
+            #_[:ul {:class "nav nav-tabs"}
+               [:li {:class "nav-item"
+                     :onclick #(student-modal-tab.reset :student)}
+                [:a {:href "#"
+                     :style "padding: 7px"
+                     :class (if (= :student student-modal-tab-val)
+                              "nav-link active" "nav-link")} "Students"]]
+               [:li {:class "nav-item"
+                     :onclick #(student-modal-tab.reset :schema)}
+                [:a {:href "#"
+                     :style "padding: 7px"
+                     :class (if (= :schema student-modal-tab-val)
+                              "nav-link active" "nav-link")} "Scheme"]]]
+            (invoke-component2 add-student-tab)])))
 
 (defn set-scale-start [start]
   (scale.swap
@@ -19,17 +109,12 @@
       (= "1" start) {:start "1" :end "10"})))
 
 (defn set-scale-end [end]
-  (set! scale.state.end end)
-  (scale.update))
+  (scale.swap assoc :end end))
 
-(defcomponent scaling [s]
+(defn scaling [s]
   (let [
          {:keys [start end even-weighting]} s
-         select-end (cond
-                      (= "A" start) ["C" "D" "E" "F"]
-                      (= "1" start) ["10" "100"])
          ]
-    (console.log "even-weighting" even-weighting)
     [:div {}
      [:h5 {} "Marking Scale"]
      [:select {:value start
@@ -39,10 +124,10 @@
       [:option {:value 1} 1]]
      (if (= "1" start)
        [" to "
-         [:select {:value end
-                   :onchange #(set-scale-end (-> % .-target .-value))}
-          (for [value select-end]
-            [:option {:value value} value])]])
+        [:select {:value end
+                  :onchange #(set-scale-end (-> % .-target .-value))}
+         (for [value ["10" "100"]]
+           [:option {:value value} value])]])
      [:div {:style "margin-top: 10px"}
       [:input {:type "checkbox"
                :checked even-weighting
@@ -84,7 +169,8 @@
 (defn section [{:keys [title comments]}
                i
                active-comments
-               {scale-start :start scale-end :end}]
+               {scale-start :start scale-end :end}
+               student-val]
   (let [
          scores (section-scores (or active-comments {}) comments)
          av-score (average-score (mean scores) scale-start scale-end)
@@ -99,37 +185,64 @@
            [:p {}
             (for [phrase (paragraph.split "; ")]
               (if (get (or active-comments {}) phrase)
-                [:strong {:onclick #(state.swap dissoc-in [i phrase])} phrase "; "]
-                [:span {:onclick #(state.swap assoc-in [i phrase] true)} phrase "; "]))])])]]))
+                [:strong {:onclick #(state.swap dissoc-in [student-val i phrase])} phrase "; "]
+                [:span {:onclick #(state.swap assoc-in [student-val i phrase] true)} phrase "; "]))])])]]))
 
 (defcomponent app []
+  (fn componentDidMount []
+    (.modal ($ "#student-modal") "show"))
   (let [
+         current-student-val @current-student
          state-val @state
-         scale-val @scale
-         scores (window.template.map
-                  (fn [{:keys [comments]} i]
-                    (let [
-                           active-comments (get state-val i {})
-                           ]
-                      (section-scores active-comments comments))))
-         mean-score (if (get scale-val :even-weighting)
-                      (mean (.filter (scores.map mean) isFinite))
-                      (mean (apply concat scores)))
-         overall-score (average-score mean-score scale-val.start scale-val.end)
+         edit-button [:button {:class "btn btn-default"
+                               :onclick #(.modal ($ "#student-modal") "show")} "Edit"]
          ]
-    [:div {:class "container"}
-     [:h2 {} "Report"]
-     (invoke-component2 scaling scale-val)
-     [:br {}]
-     (window.template.map #(section %1 %2 (get state-val %2 {}) scale-val))
-     [:br {}]
-     [:h4 {} "Overall Score: " overall-score]
-     [:button {:class "btn btn-default"
-               :onclick #(state.reset [])} "Clear"]
-     " "
-     [:button {:class "btn btn-default"
-               :data-toggle "modal"
-               :data-target "#finalize"} "Complete"]]))
+    (if (get state-val current-student-val)
+      (let [
+             {:keys [name]} (get state-val current-student-val)
+             scale-val @scale
+             scores (window.template.map
+                      (fn [{:keys [comments]} i]
+                        (let [
+                               active-comments (get-in state-val [current-student-val i] {})
+                               ]
+                          (section-scores active-comments comments))))
+             mean-score (if (get scale-val :even-weighting)
+                          (mean (.filter (scores.map mean) isFinite))
+                          (mean (apply concat scores)))
+             overall-score (average-score mean-score scale-val.start scale-val.end)
+             ]
+        [:div {:class "container"}
+         (invoke-component2 student-modal)
+         [:h2 {} "Report for " name]
+         (scaling scale-val)
+         [:br {}]
+         (window.template.map #(section %1 %2 (get-in state-val [current-student-val %2] {}) scale-val current-student-val))
+         [:br {}]
+         [:h4 {} "Overall Score: " overall-score]
+         [:button {:class "btn btn-default"
+                   :onclick
+                   #(when (confirm "Clear Scores?")
+                      (state.swap update-in [current-student-val] select-keys ["name" "email"]))} "Clear"]
+         " "
+         (if (> current-student-val 0)
+           [:button {:class "btn btn-default"
+                     :onclick #(current-student.swap dec)} "Previous Student"])
+         " "
+         (if (< current-student-val (dec state-val.length))
+           [:button {:class "btn btn-default"
+                     :onclick #(current-student.swap inc)} "Next Student"])
+         " "
+         [:button {:class "btn btn-default"
+                   :data-toggle "modal"
+                   :data-target "#finalize"} "Complete"]
+         " "
+         edit-button
+         ])
+      [:div {:class "container"}
+       (invoke-component2 student-modal)
+       [:h3 {} "No Students Selected"]
+       edit-button])))
 
 (defn main []
   (let [container (document.getElementById "application")]

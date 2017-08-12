@@ -81,7 +81,7 @@
             (util/html-response
               (template {
                           :deps [deps/saas deps/rc-rate]
-                          :vars {"template" (spreadsheet/parse-workbook tempfile)}
+                          :vars (spreadsheet/parse-workbook tempfile)
                           :client-script "main()"
                           })))))
   (route/resources "/public")

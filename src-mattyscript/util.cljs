@@ -1,15 +1,28 @@
 (ns util)
 
+(literal
+  "import preact from \"preact\";
+  const {h} = preact;")
+
+(defn ^:export butlast [s]
+  (s.slice 0 (- s.length 1)))
+
+(defn ^:export last [s]
+  (get s (- s.length 1)))
+
+(defn ^:export str-contains [s t]
+  (>= (s.indexOf t) 0))
+
 (defn ^:export prn [x]
   (console.log (JSON.stringify x)))
 
-(defn ^:export get-in [m [k & ks]]
+(defn ^:export get-in [m [k & ks] alt]
   (let [
          v (get m k)
          ]
     (if (and v (> ks.length 0))
-      (get-in v ks)
-      v)))
+      (get-in v ks alt)
+      (or v alt))))
 
 (defn ^:export seqm [m]
   (for [k (Object.keys m)]
@@ -47,6 +60,16 @@
       (assoc m2 k (assoc-in (get m2 k) ks v))
       (assoc m2 k v))))
 
+(defn ^:export into [m s]
+  (doseq [[k v] s]
+    (assoc m k v))
+  m)
+
+(defn ^:export select-keys [m s]
+  (into {}
+        (for [k s :when (in k m)]
+          [k (get m k)])))
+
 (defn ^:export update-in [m [k & ks] f & args]
   (let [
          m2 (or m {})
@@ -69,6 +92,14 @@
 
 (defn ^:export inc [x]
   (+ x 1))
+
+(defn ^:export dec [x]
+  (- x 1))
+
+(defn ^:export del-i [s i]
+  (.concat
+    (s.slice 0 i)
+    (s.slice (inc i))))
 
 (defn ^:export sum [x]
   (x.reduce #(+ %1 %2) 0))

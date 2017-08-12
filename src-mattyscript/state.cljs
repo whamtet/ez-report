@@ -52,7 +52,6 @@
 (class ^:export SessionAtom Atom
        (fn constructor [k value override?]
          (super)
-         (console.log "override?" override?)
          (let [k2 (+ location.pathname k)]
            (set! this.state (or (if-not override? (session-get k2)) value))
            (set! this.k k2)))
